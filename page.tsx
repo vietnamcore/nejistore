@@ -2,49 +2,45 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle, XCircle, Package, Filter } from "lucide-react";
+import { Users, Shield, CheckCircle, XCircle } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { useAuthStore } from "@/stores/auth-store";
-import { formatCurrency, formatDate, getStatusLabel, getStatusColor } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 
-export default function AdminOrdersPage() {
+export default function AdminUsersPage() {
   const { user, token } = useAuthStore();
-  const [orders, setOrders] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filter, setFilter] = useState("all");
 
   useEffect(() => {
-    if (token && user?.role === "admin") fetchOrders();
-  }, [token, user, filter]);
+    if (token && user?.role === "admin") fetchUsers();
+  }, [token, user]);
 
-  const fetchOrders = async () => {
-    setIsLoading(true);
+  const fetchUsers = async () => {
     try {
-      const statusParam = filter !== "all" ? `?status=${filter}` : "";
-      const res = await fetch(`/api/admin/orders${statusParam}`, {
+      const res = await fetch("/api/admin/users", {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (data.success) setOrders(data.data);
+      if (data.success) setUsers(data.data);
     } catch (error) {
-      console.error("Fetch orders error:", error);
+      console.error("Fetch users error:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleConfirmOrder = async (orderId: string, action: "confirm" | "reject") => {
+  const handleToggleActive = async (userId: string, isActive: boolean) => {
     try {
-      const res = await fetch("/api/admin/orders", {
+      await fetch("/api/admin/users", {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ orderId, action }),
+        body: JSON.stringify({ userId, isActive: !isActive }),
       });
-      const data = await res.json();
-      if (data.success) fetchOrders();
+      fetchUsers();
     } catch (error) {
-      console.error("Confirm order error:", error);
+      console.error("Toggle user error:", error);
     }
   };
 
@@ -60,93 +56,76 @@ export default function AdminOrdersPage() {
     );
   }
 
-  const filters = [
-    { value: "all", label: "Tất cả" },
-    { value: "awaiting_confirmation", label: "Chờ xác nhận" },
-    { value: "active", label: "Đang thuê" },
-    { value: "completed", label: "Hoàn thành" },
-    { value: "expired", label: "Hết hạn" },
-    { value: "cancelled", label: "Đã hủy" },
-  ];
-
   return (
     <main className="aurora-bg min-h-screen">
       <Header />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-28 pb-20">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
-            Quản Lý <span className="text-primary">Đơn Hàng</span>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-6">
+            Quản Lý <span className="text-primary">Người Dùng</span>
           </h1>
 
-          <div className="flex items-center gap-2 mb-6 mt-4 flex-wrap">
-            {filters.map((f) => (
-              <button
-                key={f.value}
-                onClick={() => setFilter(f.value)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  filter === f.value ? "bg-primary/10 text-primary" : "text-neutral-500 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-
           {isLoading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="skeleton h-24 rounded-xl" />
-              ))}
-            </div>
-          ) : orders.length === 0 ? (
-            <div className="glass rounded-xl p-12 text-center">
-              <Package className="w-12 h-12 text-neutral-700 mx-auto mb-3" />
-              <p className="text-neutral-500">Không có đơn hàng</p>
-            </div>
+            <div className="skeleton h-60 rounded-xl" />
           ) : (
-            <div className="space-y-3">
-              {orders.map((order, i) => (
-                <motion.div
-                  key={order.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.03 }}
-                  className="glass rounded-xl p-5"
-                >
-                  <div className="flex items-center justify-between flex-wrap gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-medium text-white truncate">{order.orderCode}</p>
-                        <span className={`text-xs ${getStatusColor(order.status)}`}>
-                          {getStatusLabel(order.status)}
-                        </span>
-                      </div>
-                      <p className="text-sm text-neutral-400">
-                        {order.accountName || "Acc"} • {order.hours} giờ • {formatCurrency(order.price)}
-                      </p>
-                      <p className="text-xs text-neutral-500 mt-1">
-                        Khách: {order.userName || "N/A"} ({order.userEmail || "N/A"}) • {formatDate(order.createdAt)}
-                      </p>
-                    </div>
-                    {(order.status === "awaiting_confirmation" || order.status === "pending_payment") && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleConfirmOrder(order.id, "confirm")}
-                          className="flex items-center gap-1.5 px-3 py-2 bg-green-500/10 text-green-400 border border-green-500/20 rounded-lg text-xs font-medium hover:bg-green-500/20 transition-all"
-                        >
-                          <CheckCircle className="w-4 h-4" /> Xác nhận
-                        </button>
-                        <button
-                          onClick={() => handleConfirmOrder(order.id, "reject")}
-                          className="flex items-center gap-1.5 px-3 py-2 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg text-xs font-medium hover:bg-red-500/20 transition-all"
-                        >
-                          <XCircle className="w-4 h-4" /> Từ chối
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
+            <div className="glass rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-white/5">
+                      <th className="text-left p-3 text-neutral-400 font-medium">Người dùng</th>
+                      <th className="text-left p-3 text-neutral-400 font-medium">Email</th>
+                      <th className="text-left p-3 text-neutral-400 font-medium">Vai trò</th>
+                      <th className="text-left p-3 text-neutral-400 font-medium">Xác thực</th>
+                      <th className="text-left p-3 text-neutral-400 font-medium">Ngày tạo</th>
+                      <th className="text-left p-3 text-neutral-400 font-medium">Trạng thái</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((u) => (
+                      <tr key={u.id} className="border-b border-white/3 hover:bg-white/2">
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold">
+                              {u.fullName?.[0]?.toUpperCase() || "U"}
+                            </div>
+                            <div>
+                              <p className="text-white font-medium">{u.fullName}</p>
+                              <p className="text-xs text-neutral-500">@{u.username}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-3 text-neutral-300">{u.email}</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded-full text-xs ${
+                            u.role === "admin" ? "bg-primary/10 text-primary" : "bg-blue-400/10 text-blue-400"
+                          }`}>
+                            {u.role === "admin" ? "Admin" : "User"}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          {u.emailVerified ? (
+                            <CheckCircle className="w-4 h-4 text-green-400" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-red-400" />
+                          )}
+                        </td>
+                        <td className="p-3 text-neutral-400">{formatDate(u.createdAt)}</td>
+                        <td className="p-3">
+                          <button
+                            onClick={() => handleToggleActive(u.id, u.isActive)}
+                            className={`px-2 py-0.5 rounded-full text-xs ${
+                              u.isActive ? "bg-green-400/10 text-green-400" : "bg-red-400/10 text-red-400"
+                            }`}
+                          >
+                            {u.isActive ? "Hoạt động" : "Vô hiệu"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </motion.div>
