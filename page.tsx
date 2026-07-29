@@ -1,41 +1,33 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
 import { motion } from "framer-motion";
-import { Gamepad2, Clock, Loader2, RefreshCw } from "lucide-react";
+import { Gamepad2, Edit3, Save, Loader2, RefreshCw } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import { formatCurrency, getStatusLabel, getTimeRemaining } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import { formatCurrency, getStatusLabel } from "@/lib/utils";
 
-interface AccountWithPricing {
-  id: string;
-  name: string;
-  description: string | null;
-  imageUrl: string | null;
-  status: string;
-  level: string | null;
-  rank: string | null;
-  currentExpiresAt: string | null;
-  pricing: { hours: number; price: number }[];
-}
-
-export default function AccountsPage() {
-  const [accounts, setAccounts] = useState<AccountWithPricing[]>([]);
+export default function AdminAccountsPage() {
+  const { user, token } = useAuthStore();
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<any>({});
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
-    fetchAccounts();
-  }, []);
+    if (token && user?.role === "admin") fetchAccounts();
+  }, [token, user]);
 
   const fetchAccounts = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("/api/accounts");
+      const res = await fetch("/api/admin/accounts", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json();
-      if (data.success) {
-        setAccounts(data.data);
-      }
+      if (data.success) setAccounts(data.data);
     } catch (error) {
       console.error("Fetch accounts error:", error);
     } finally {
@@ -43,156 +35,191 @@ export default function AccountsPage() {
     }
   };
 
+  const handleEdit = (account: any) => {
+    setEditingId(account.id);
+    setEditForm({
+      name: account.name,
+      description: account.description || "",
+      gameEmail: account.gameEmail || "",
+      gamePassword: account.gamePassword || "",
+      status: account.status,
+      level: account.level || "",
+      rank: account.rank || "",
+      isActive: account.isActive,
+      pricing: account.pricing.map((p: any) => ({ hours: p.hours, price: p.price, id: p.id })),
+    });
+  };
+
+  const handleSave = async (accountId: string) => {
+    try {
+      // Update account info
+      await fetch("/api/admin/accounts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ accountId, ...editForm }),
+      });
+
+      // Update pricing
+      await fetch("/api/admin/accounts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ accountId, pricingData: editForm.pricing }),
+      });
+
+      setMessage("Cập nhật thành công");
+      setEditingId(null);
+      fetchAccounts();
+      setTimeout(() => setMessage(""), 3000);
+    } catch (error) {
+      setMessage("Cập nhật thất bại");
+    }
+  };
+
+  if (!user || user.role !== "admin") {
+    return (
+      <main className="aurora-bg min-h-screen">
+        <Header />
+        <div className="flex items-center justify-center min-h-screen">
+          <p className="text-neutral-400">Không có quyền truy cập</p>
+        </div>
+        <Footer />
+      </main>
+    );
+  }
+
   return (
     <main className="aurora-bg min-h-screen">
       <Header />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-20">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-12"
-        >
-          <h1 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-            Tài Khoản <span className="text-primary">Free Fire</span>
-          </h1>
-          <p className="text-neutral-400">Chọn tài khoản phù hợp với bạn</p>
-        </motion.div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-28 pb-20">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl sm:text-3xl font-bold text-white">
+              Quản Lý <span className="text-primary">Tài Khoản</span>
+            </h1>
+            <button
+              onClick={fetchAccounts}
+              className="flex items-center gap-2 px-3 py-2 glass rounded-lg text-sm text-neutral-400 hover:text-white"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+              Làm mới
+            </button>
+          </div>
 
-        <div className="flex justify-end mb-6">
-          <button
-            onClick={fetchAccounts}
-            className="flex items-center gap-2 px-4 py-2 glass rounded-lg text-sm text-neutral-400 hover:text-white transition-colors"
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
-            Làm mới
-          </button>
-        </div>
+          {message && (
+            <div className="mb-4 p-3 rounded-lg bg-green-500/10 text-green-400 text-sm">{message}</div>
+          )}
 
-        {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="glass rounded-2xl p-6">
-                <div className="skeleton h-6 w-3/4 mb-4" />
-                <div className="skeleton h-4 w-1/2 mb-4" />
-                <div className="skeleton h-4 w-full mb-2" />
-                <div className="skeleton h-4 w-2/3 mb-6" />
-                <div className="skeleton h-10 w-full" />
+          <div className="space-y-4">
+            {accounts.map((account) => (
+              <div key={account.id} className="glass rounded-xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                      <Gamepad2 className="w-6 h-6 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-white">{account.name}</h3>
+                      <p className="text-xs text-neutral-500">
+                        Status: {getStatusLabel(account.status)} • {account.pricing?.length || 0} gói giá
+                      </p>
+                    </div>
+                  </div>
+                  {editingId === account.id ? (
+                    <button
+                      onClick={() => handleSave(account.id)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-lg text-sm"
+                    >
+                      <Save className="w-4 h-4" /> Lưu
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleEdit(account)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 glass rounded-lg text-sm text-primary"
+                    >
+                      <Edit3 className="w-4 h-4" /> Sửa
+                    </button>
+                  )}
+                </div>
+
+                {editingId === account.id ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs text-neutral-500">Tên</label>
+                        <input
+                          value={editForm.name}
+                          onChange={(e) => setEditForm((p: any) => ({ ...p, name: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-neutral-500">Trạng thái</label>
+                        <select
+                          value={editForm.status}
+                          onChange={(e) => setEditForm((p: any) => ({ ...p, status: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm outline-none"
+                        >
+                          <option value="available">Có sẵn</option>
+                          <option value="rented">Đang thuê</option>
+                          <option value="maintenance">Bảo trì</option>
+                          <option value="locked">Tạm khóa</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-neutral-500">Email game</label>
+                        <input
+                          value={editForm.gameEmail}
+                          onChange={(e) => setEditForm((p: any) => ({ ...p, gameEmail: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-neutral-500">Mật khẩu game</label>
+                        <input
+                          value={editForm.gamePassword}
+                          onChange={(e) => setEditForm((p: any) => ({ ...p, gamePassword: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-neutral-500 mb-2 block">Bảng giá</label>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {editForm.pricing?.map((p: any, i: number) => (
+                          <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-white/3">
+                            <span className="text-xs text-neutral-400">{p.hours}h:</span>
+                            <input
+                              type="number"
+                              value={p.price}
+                              onChange={(e) => {
+                                const newPricing = [...editForm.pricing];
+                                newPricing[i] = { ...newPricing[i], price: parseInt(e.target.value) || 0 };
+                                setEditForm((prev: any) => ({ ...prev, pricing: newPricing }));
+                              }}
+                              className="flex-1 px-2 py-1 rounded bg-white/5 border border-white/10 text-white text-sm outline-none w-20"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {account.pricing?.map((p: any) => (
+                      <div key={p.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/3 text-xs">
+                        <span className="text-neutral-400">{p.hours} giờ</span>
+                        <span className="text-primary font-medium">{formatCurrency(p.price)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
-        ) : accounts.length === 0 ? (
-          <div className="text-center py-20">
-            <Gamepad2 className="w-16 h-16 text-neutral-700 mx-auto mb-4" />
-            <p className="text-neutral-500">Chưa có tài khoản nào</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {accounts.map((account, i) => (
-              <AccountCard key={account.id} account={account} index={i} />
-            ))}
-          </div>
-        )}
+        </motion.div>
       </div>
       <Footer />
     </main>
-  );
-}
-
-function AccountCard({ account, index }: { account: AccountWithPricing; index: number }) {
-  const [timeRemaining, setTimeRemaining] = useState(getTimeRemaining(account.currentExpiresAt || ""));
-
-  useEffect(() => {
-    if (account.status !== "rented" || !account.currentExpiresAt) return;
-
-    const interval = setInterval(() => {
-      setTimeRemaining(getTimeRemaining(account.currentExpiresAt || ""));
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [account.status, account.currentExpiresAt]);
-
-  const isAvailable = account.status === "available";
-  const minPrice = account.pricing.length > 0 ? Math.min(...account.pricing.map((p) => p.price)) : 0;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
-      whileHover={{ y: -5, scale: 1.01 }}
-      className="glass rounded-2xl p-6 hover:glow-green transition-all duration-300 group"
-    >
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-            <Gamepad2 className="w-7 h-7 text-primary" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-white">{account.name}</h3>
-            {account.rank && <p className="text-xs text-neutral-500">Rank: {account.rank}</p>}
-          </div>
-        </div>
-        <span
-          className={`px-2.5 py-1 rounded-full text-xs font-medium border ${
-            account.status === "available"
-              ? "bg-green-400/10 text-green-400 border-green-400/20"
-              : account.status === "rented"
-              ? "bg-red-400/10 text-red-400 border-red-400/20"
-              : account.status === "pending_payment"
-              ? "bg-yellow-400/10 text-yellow-400 border-yellow-400/20"
-              : "bg-gray-400/10 text-gray-400 border-gray-400/20"
-          }`}
-        >
-          {getStatusLabel(account.status)}
-        </span>
-      </div>
-
-      {account.description && (
-        <p className="text-sm text-neutral-500 mb-4 line-clamp-2">{account.description}</p>
-      )}
-
-      {account.status === "rented" && !timeRemaining.isExpired && (
-        <div className="mb-4 p-3 rounded-lg bg-red-500/5 border border-red-500/10">
-          <p className="text-xs text-red-400 mb-1">🔴 Đang được thuê</p>
-          <div className="flex items-center gap-2 text-sm text-white font-mono">
-            <Clock className="w-4 h-4 text-red-400" />
-            Còn: {String(timeRemaining.hours).padStart(2, "0")} giờ{" "}
-            {String(timeRemaining.minutes).padStart(2, "0")} phút{" "}
-            {String(timeRemaining.seconds).padStart(2, "0")} giây
-          </div>
-        </div>
-      )}
-
-      {/* Pricing */}
-      <div className="mb-4">
-        <p className="text-xs text-neutral-500 mb-2">Bảng giá:</p>
-        <div className="grid grid-cols-2 gap-2">
-          {account.pricing.map((p) => (
-            <div
-              key={p.hours}
-              className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/3 text-xs"
-            >
-              <span className="text-neutral-400">{p.hours} giờ</span>
-              <span className="text-primary font-medium">{formatCurrency(p.price)}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <Link href={isAvailable ? `/accounts/${account.id}` : "#"}>
-        <motion.button
-          whileHover={isAvailable ? { scale: 1.02 } : {}}
-          whileTap={isAvailable ? { scale: 0.98 } : {}}
-          disabled={!isAvailable}
-          className={`w-full py-3 rounded-xl font-medium text-sm transition-all ${
-            isAvailable
-              ? "bg-gradient-to-r from-primary to-primary-dark text-white hover:shadow-lg hover:shadow-primary/20"
-              : "bg-neutral-800 text-neutral-600 cursor-not-allowed"
-          }`}
-        >
-          {isAvailable ? "Thuê Ngay" : "Không sẵn sàng"}
-        </motion.button>
-      </Link>
-    </motion.div>
   );
 }
